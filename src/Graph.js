@@ -1,26 +1,21 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { data } from './data';
 import G6 from '@antv/g6';
 import NodeToolTips from './NodeToolTips';
+import useWindowDimensions from './Hooks/useWindowDimensions';
 
 const Graph = () => {
   const ref = React.useRef(null)
   let graph = null
 
-  // 边tooltip坐标
-  const [showEdgeTooltip, setShowEdgeTooltip] = useState(false)
-  const [edgeTooltipX, setEdgeTooltipX] = useState(0)
-  const [edgeTooltipY, setEdgeTooltipY] = useState(0)
-
-  // 节点tooltip坐标
+  //tool tip
   const [showNodeTooltip, setShowNodeTooltip] = useState(false)
   const [nodeTooltipX, setNodeToolTipX] = useState(0)
   const [nodeTooltipY, setNodeToolTipY] = useState(0)
 
-  // 节点ContextMenu坐标
-  const [showNodeContextMenu, setShowNodeContextMenu] = useState(false)
-  const [nodeContextMenuX, setNodeContextMenuX] = useState(0)
-  const [nodeContextMenuY, setNodeContextMenuY] = useState(0)
+  //node 
+  const [selectedNode, setSelectedNode] = useState(null)
+
 
   function refreshDragedNodePosition(e) {
     const model = e.item.get('model');
@@ -29,21 +24,69 @@ const Graph = () => {
     model.x = e.x;
     model.y = e.y;
   }
+
+
+  
+
+
   const bindEvents = () => {
-    // 监听edge上面mouse事件
 
+    //resize graph on window resize
+    if (typeof window !== 'undefined'){
+        window.onresize = () => {
+            console.log("resized")
+        if (!graph || graph.get('destroyed')) return;
+        if (!ref || !ref.current.offsetWidth || !ref.current.offsetHeight) return;
+        graph.changeSize(ref.current.offsetWidth, ref.current.offsetHeight);
+    }
+   
+    };
 
+    const clearNodes = ()=>{
+        graph.getNodes().forEach(function (node) {
+            graph.clearItemStates(node);
+         });
+    }
+    graph.on('canvas:mouseover', evt =>{
+        graph.getNodes().forEach(function (node) {
+            graph.clearItemStates(node);
+         });
+    })
     // 监听node上面mouse事件
     graph.on('node:click', evt => {
-        console.log(evt)
         const { item } = evt
         const model = item.getModel()
         const { x, y } = model
         const point = graph.getCanvasByPoint(x, y)
-
+        graph.setItemState(item, 'selected', true);//set node style
         setNodeToolTipX(point.x - 75)
         setNodeToolTipY(point.y)
         setShowNodeTooltip(true)
+        setSelectedNode(item._cfg.model)
+      })
+    
+    graph.on('node:touchstart', evt => {
+        clearNodes()
+        console.log(evt)
+        const { item } = evt
+        const model = item.getModel()
+        const { x, y } = model
+        const point = graph.getCanvasByPoint(x, y)        
+        graph.setItemState(item, 'selected', true);//set node style
+        setNodeToolTipX(point.x - 75)
+        setNodeToolTipY(point.y)
+        setShowNodeTooltip(true)
+        setSelectedNode(item._cfg.model)
+      })
+
+      graph.on('canvas:touchstart', evt => {
+        clearNodes()
+        setShowNodeTooltip(false)
+      })
+
+      graph.on('canvas:drag', evt => {
+        clearNodes()
+        setShowNodeTooltip(false)
       })
 
     //   graph.on('node:dragstart', function (e) {
@@ -66,24 +109,33 @@ const Graph = () => {
   }
 //container: ref.current,
 useEffect(() => {
-
-  
   if (!graph) {
-    graph = new G6.Graph({
+      graph = new G6.Graph({
       container: ref.current,
       width: ref.current.offsetWidth,
       height: ref.current.offsetHeight,
+      fitView:true,
       modes: {
         default: [
             {
                 type: 'activate-relations',
             },
-            'drag-canvas'
+            {
+                type: 'drag-canvas',
+                allowDragOnItem: true
+            },
+            {
+                type:'zoom-canvas',
+                sensitivity: 1,
+                
+            }
+           , 'double-finger-drag-canvas'
           ],
       },
       layout: {
         type: 'force',
-        nodeStrength: -100,
+        nodeSize: 500,
+        nodeStrength: -1000,
         edgeStrength: 0.1,
         
         // edgeStrength: 100,
@@ -98,20 +150,26 @@ useEffect(() => {
       },
         nodeStateStyles: {
             active: {
-            fill: '#000000',
-        }
+                fill: '#000000',
+            },
+            selected: {
+                stroke: '#666',
+                lineWidth: 2,
+                fill: 'steelblue',
+              },
         },
       defaultNode: {
-        label:'artist_name',
-        type: 'triangle',
+        
+        size: 50,
+        type: 'circle',
         img: 'https://gw.alipayobjects.com/zos/rmsportal/XuVpGqBFxXplzvLjJBZB.svg',
-        // labelCfg: {
-        //   position:'left',
-        //   style: {
-        //     fill: '#ffffff',
-        //     fontSize: 12,
-        //   },
-        // }
+        labelCfg: {
+            position:'left',
+            style: {
+                fill: '#000',
+                fontSize: 12,
+            },
+        }
         // style: {
         //     fill: 'l(0) 0:#ffffff 0.5:#7ec2f3 1:#1890ff',
         //     stroke: '#72CC4A',
@@ -128,19 +186,20 @@ useEffect(() => {
       },
     });
   }
-  fetch('https://gw.alipayobjects.com/os/antvdemo/assets/data/xiaomi.json')
+  fetch('https://jmazzone.nettwerk.com/api/artist_data.php')
   .then((res) => res.json())
   .then((data) => {
+    console.log(data, "gere")
     graph.data(data);
-
     graph.render();
+    
   });
   bindEvents()
 }, []);
 
   return (
     <div className='bg-white w-full h-screen' ref={ref}>
-      { showNodeTooltip && <NodeToolTips x={nodeTooltipX} y={nodeTooltipY} setShowNodeTooltip={setShowNodeTooltip} /> }
+      { showNodeTooltip && <NodeToolTips node={selectedNode} x={nodeTooltipX} y={nodeTooltipY} setShowNodeTooltip={setShowNodeTooltip} /> }
     </div>
   );
 }

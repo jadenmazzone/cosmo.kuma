@@ -12,11 +12,14 @@ const GraphGraphin = () =>{
     const [data, setData] =  useState(null)
 
     useEffect(()=>{
-        fetch('https://gw.alipayobjects.com/os/antvdemo/assets/data/xiaomi.json')
+        fetch('https://jmazzone.nettwerk.com/api/artist_data.php')
         .then((res) => res.json())
         .then((data) => {
-           setData(data) 
-        });
+            console.log(data)
+        })
+        .catch(error => {
+            console.log(error)
+        })
     },[])
 
     return ( 
